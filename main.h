@@ -25,6 +25,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f4_discovery.h"
+//#include "stm32f4_lcd.h"
 #include <stdio.h>
 
 
@@ -106,6 +107,7 @@ void PC8_9_PWM_config(void);
 void PE6_PWM_config(void);
 void PB9_PWM_config(void);
 void PD12_15_PWM_config(void);
+void Configure_PB12(void);
 
 /* ADC Config */
 void DMA2_Stream4_IRQHandler(void);

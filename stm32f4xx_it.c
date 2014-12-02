@@ -39,6 +39,9 @@
 /* Private variables ---------------------------------------------------------*/
 extern __IO uint8_t UserButtonPressed;
 __IO uint8_t TempAcceleration = 0;
+extern volatile uint32_t Timing;
+extern volatile uint32_t Timing2;
+extern flag;
 /* Private function prototypes -----------------------------------------------*/
 
 
@@ -139,16 +142,13 @@ void PendSV_Handler(void)
   * @param  None
   * @retval None
   */
-void SysTick_Handler(void)
+/*void SysTick_Handler(void)
 {
   uint8_t *buf;
   uint8_t temp1, temp2 = 0x00;
-  
-
+    flag = 1;
     TimingDelay_Decrement();
-
-  
-}
+}*/
 
 /******************************************************************************/
 /*                 STM32Fxxx Peripherals Interrupt Handlers                   */
