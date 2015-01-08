@@ -38,7 +38,10 @@ __IO uint8_t UserButtonPressed = 0x00;
 __IO uint64_t currentTime = 0;
 __IO uint64_t oldTime = 0;
 __IO uint64_t Timing = 0;
+__IO uint32_t diffTime = 0;
+__IO uint64_t Velocity = 0;
 volatile int over_flag = 0;
+volatile int btFlag = 0;
 
 /* Lidar (Usart) -------------------------------------------------------------*/
 //const int front_obstacle_region[90] = {500, 500, 500, 501, 501, 502, 503, 504, 505, 506, 508, 509, 511, 513, 515, 518, 520, 523, 526, 529, 532, 536, 539, 543, 547, 552, 556, 561, 566, 572, 577, 583, 590, 596, 603, 610, 618, 626, 635, 643, 653, 663, 673, 684, 695, 707, 720, 733, 747, 762, 778, 795, 812, 831, 851, 872, 894, 918, 944, 971, 1000, 1031, 1065, 1101, 1141, 1183, 1229, 1280, 1335, 1395, 1462, 1536, 1618, 1710, 1814, 1932, 2067, 2223, 2405, 2620, 2879, 3196, 3593, 4103, 4783, 5737, 7168, 9554, 14327, 28649};
@@ -195,105 +198,78 @@ static void Front_Obstacle_task(void *pvParameters){
   int valid_distance[9] = {0};
 
   while(1){
-
-     /* for (i = 0; i < 9; i++){
-        front_region[i] = 0;
-        valid_distance[9] = 0;
-      }*/
-/*
-      for(count = 0; count < 90; count++){
-        if(degree_distance != -1){
-          x_position = (degree_distance[count]*sin_array[90 - count]) >> 1000;
-          
-          if (x_position <= 500){
-            front_region[x_position/110] += 6000 - ((degree_distance[count]*sin_array[count]) >> 10);
-            valid_distance[x_position/110]++;
-          }
-        }
-      }
-      
-      for(count = 91; count < 180; count++){
-        if(degree_distance != -1){
-          tmp_degree = 180 - count;
-          x_position = (degree_distance[tmp_degree]*sin_array[90 - tmp_degree]) >> 10;
-
-          if (x_position <= 500){
-            front_region[x_position/110+4] += 6000 -((degree_distance[count]*sin_array[count]) >> 10);
-            valid_distance[x_position/110+4]++;
-          }
-        }
-      }
-*/
-        
         long tmp_1 = 0, tmp_2 = 0, tmp_3 = 0, tmp_4 = 0, tmp_5 = 0, tmp_6 = 0, tmp_7 = 0, tmp_8 = 0, tmp_9 = 0;
         int ratio = 19;
         long d_1 = ratio, d_2 = ratio, d_3 = ratio, d_4 = ratio, d_5 = ratio, d_6 = ratio, d_7 = ratio, d_8 = ratio, d_9 = ratio;
         int tmp_count = 0;
 
         for(tmp_count = 0; tmp_count < ratio; tmp_count++){
-          if(degree_distance[tmp_count] >= 0){
+          if(degree_distance[tmp_count] > 0){
             tmp_1 += degree_distance[tmp_count];
           }
           else{
             d_1 --;
           }
 
-          if(degree_distance[tmp_count+ratio] >= 0){
+          if(degree_distance[tmp_count+ratio] > 0){
             tmp_2 += degree_distance[tmp_count+ratio];
           }
           else{
             d_2 --;
           }
 
-          if(degree_distance[tmp_count+ratio*2] >= 0){
+          if(degree_distance[tmp_count+ratio*2] > 0){
             tmp_3 += degree_distance[tmp_count+ratio*2];
           }
           else{
             d_3 --;
           }
           
-          if(degree_distance[tmp_count+ratio*3] >= 0){
+          if(degree_distance[tmp_count+ratio*3] > 0){
             tmp_4 += degree_distance[tmp_count+ratio*3];
           }
           else{
             d_4 --;
           }
           
-          if(degree_distance[tmp_count+ratio*4] >= 0){
+          if(degree_distance[tmp_count+ratio*4] > 0){
             tmp_5 += degree_distance[tmp_count+ratio*4];
           }
           else{
             d_5 --;
           }
 
-          if(degree_distance[tmp_count+ratio*5] >= 0){
+          if(degree_distance[tmp_count+ratio*5] > 0){
             tmp_6 += degree_distance[tmp_count+ratio*5];
           }
           else{
             d_6 --;
           }
 
-          if(degree_distance[tmp_count+ratio*6] >= 0){
+          if(degree_distance[tmp_count+ratio*6] > 0){
             tmp_7 += degree_distance[tmp_count+ratio*6];
           }
           else{
             d_7 --;
           }
 
-          if(degree_distance[tmp_count+ratio*7] >= 0){
+          if(degree_distance[tmp_count+ratio*7] > 0){
             tmp_8 += degree_distance[tmp_count+ratio*7];
           }
           else{
             d_8 --;
           }
 
-          if(degree_distance[tmp_count+ratio*8] >= 0){
+          if(degree_distance[tmp_count+ratio*8] > 0){
             tmp_9 += degree_distance[tmp_count+ratio*8];
           }
           else{
             d_9 --;
           }
         }
+
+        put_int(d_5);
+        put_int(tmp_5);
 
         tmp_1 = tmp_1/d_1;
         tmp_2 = tmp_2/d_2;
@@ -305,128 +281,68 @@ static void Front_Obstacle_task(void *pvParameters){
         tmp_8 = tmp_8/d_8;
         tmp_9 = tmp_9/d_9;
 
-        if(tmp_1 < 500){
-          PWM1 = 100;
+        if((tmp_1 < 500) ||(tmp_2 < 500) ||(tmp_3 < 1000) ||(tmp_4 < 2000) || (tmp_5 < 3000) || (tmp_6 < 2000) || (tmp_7 < 1000) || (tmp_8 < 500) || (tmp_9 < 500)){
+          if(btFlag == 0){
+            while(USART_GetFlagStatus(USARTy, USART_FLAG_TXE) == RESET);
+            USART_SendData(USARTy, 'A');
+          }
         }
         else{
-          PWM1 = 0;
-        }
-        if(tmp_2 < 1000){
-          PWM2 = 100;
-        }
-        else{
-          PWM2 = 0;
-        }
-        if(tmp_3 < 3000){
-          PWM3 = 100;
-        }
-        else{
-          PWM3 = 0;
-        }
-        if(tmp_4 < 4000){
-          PWM4 = 100;
-        }
-        else{
-          PWM4 = 0;
-        }
-        if(tmp_5 < 5000){
-          PWM5 = 100;
-        }
-        else{
-          PWM5 = 0;
+          if(btFlag == 0){
+            while(USART_GetFlagStatus(USARTy, USART_FLAG_TXE) == RESET);
+            USART_SendData(USARTy, 'F');
+          }
         }
 
-        if(tmp_6 < 4000){
-          PWM6 = 100;
-        }
-        else{
-          PWM6 = 0;
-        }
+      vTaskDelay(200);
 
-        if(tmp_7 < 3000){
-          PWM7 = 100;
-        }
-        else{
-          PWM7 = 0;
-        }
-
-        if(tmp_8 < 2000){
-          PWM8 = 100;
-        }
-        else{
-          PWM8 = 0;
-        }
-
-        if(tmp_9 < 500){
-          PWM9 = 100;
-        }
-        else{
-          PWM9 = 0;
-        }
-
-        /*PWM5 = degree_distance[45]/60;
-        PWM6 = degree_distance[90]/60;
-        PWM7 = degree_distance[135]/60;
-        PWM8 = degree_distance[180]/60;*/
-
-        //vTaskDelay(30);
-        /*
-        if(((front_region[0] / valid_distance[0]) / 60) > 20){
-          PWM1 = 100;
-        }
-        if(((front_region[1] / valid_distance[1]) / 60) > 20){
-          PWM2 = 100;
-        }
-        if(((front_region[2] / valid_distance[2]) / 60) > 20){
-          PWM3 = 100;
-        }
-        if(((front_region[3] / valid_distance[3]) / 60) > 20){
-          PWM4 = 100;
-        }
-        if(((front_region[4] / valid_distance[4]) / 60) > 20){
-          PWM5 = 100;
-        }
-        if(((front_region[5] / valid_distance[5]) / 60) > 20){
-          PWM6 = 100;
-        }
-        if(((front_region[6] / valid_distance[6]) / 60) > 20){
-          PWM7 = 100;
-        }
-        if(((front_region[7] / valid_distance[7]) / 60) > 20){
-          PWM8 = 100;
-        }
-        if(((front_region[8] / valid_distance[8]) / 60) > 20){
-          PWM9 = 100;
-        }*/
-        /*PWM2 = ((front_region[1] / valid_distance[1]) / 60);
-        PWM3 = ((front_region[2] / valid_distance[2]) / 60);
-        PWM4 = ((front_region[3] / valid_distance[3]) / 60);
-        PWM5 = ((front_region[4] / valid_distance[4]) / 60);
-        PWM6 = ((front_region[5] / valid_distance[5]) / 60);
-        PWM7 = ((front_region[6] / valid_distance[6]) / 60);
-        PWM8 = ((front_region[7] / valid_distance[7]) / 60);
-        PWM9 = ((front_region[8] / valid_distance[8]) / 60);*/
   }
 }
 
 static void external_interrupt_task(void *pvParameters){
   PWM1 = 0;
+  uint64_t v_tmp = 0;
+  //uint32_t test = 123449;
+  
   while(1){
-    if (over_flag == 1)
+    v_tmp = ((1000*1000/diffTime)*(3600/1000)) / 1000;
+    if (v_tmp > 0 && v_tmp < 30)
     {
-      //NVIC_DisableIRQ(EXTI15_10_IRQn);
-      PWM1 = 99;
-      //NVIC_EnableIRQ(EXTI15_10_IRQn);
-      //flag = 0;
-    }
-    else{
-      PWM1 = 0;
+      put_int(v_tmp);
     }
     //STM_EVAL_LEDToggle(LED5);
-    //STM_EVAL_LEDToggle(LED6);
-
-    vTaskDelay(1000);
+    vTaskDelay(100);
   }
+}
+
+void put_int(uint32_t number){
+  btFlag = 1;
+  if(number != 3000){
+    unsigned char char_buff[10] = {0};
+    int count = 0;
+    
+    /* Trnasfer integer to chars */
+    itoa(number, char_buff, 10);
+    
+    while(USART_GetFlagStatus(USARTy, USART_FLAG_TXE) == RESET);
+      USART_SendData(USARTy, 'S');
+
+    vTaskDelay(10);
+
+    /* Send the char buffer to usart */
+    while(count < 2){
+      while(USART_GetFlagStatus(USARTy, USART_FLAG_TXE) == RESET);
+      USART_SendData(USARTy, char_buff[count]);
+      count ++;
+    }
+
+    vTaskDelay(10);
+    while(USART_GetFlagStatus(USARTy, USART_FLAG_TXE) == RESET);
+      USART_SendData(USARTy, 'E');
+
+    vTaskDelay(10);
+  }
+  btFlag = 0;
 }
 
 /**
@@ -580,16 +496,17 @@ int main(void)
   STM_EVAL_LEDToggle(LED5);
   STM_EVAL_LEDToggle(LED6);
   USART_Config();
+  USART1_Config();
 
   /* Reset UserButton_Pressed variable */
   UserButtonPressed = 0x00;
 
-  PWM_config();
+  //PWM_config();
   Configure_PB12();
   xTaskCreate(external_interrupt_task,(signed portCHAR *) "Implement External Interrupt",512 /* stack size */, NULL, tskIDLE_PRIORITY + 3, NULL);
-  //xTaskCreate(usart_receive_task,(signed portCHAR *) "Implement USART",512 /* stack size */, NULL, tskIDLE_PRIORITY + 3, NULL);
-  //xTaskCreate(Transfer_Distance_task,(signed portCHAR *) "Implement Transfer distance.",512 /* stack size */, NULL, tskIDLE_PRIORITY + 3, NULL);
-  //xTaskCreate(Front_Obstacle_task,(signed portCHAR *) "Implement front obstacle detect.",512 /* stack size */, NULL, tskIDLE_PRIORITY + 3, NULL);
+  xTaskCreate(usart_receive_task,(signed portCHAR *) "Implement USART",512 /* stack size */, NULL, tskIDLE_PRIORITY + 3, NULL);
+  xTaskCreate(Transfer_Distance_task,(signed portCHAR *) "Implement Transfer distance.",512 /* stack size */, NULL, tskIDLE_PRIORITY + 3, NULL);
+  xTaskCreate(Front_Obstacle_task,(signed portCHAR *) "Implement front obstacle detect.",512 /* stack size */, NULL, tskIDLE_PRIORITY + 3, NULL);
   
   /* Start running the tasks. */
   vTaskStartScheduler(); 
@@ -648,6 +565,59 @@ void USART_Config(void)
   
   /* Enable USART */
   USART_Cmd(USARTx, ENABLE);
+}
+
+void USART1_Config(void){
+
+  USART_InitTypeDef USART_InitStructure;
+  NVIC_InitTypeDef NVIC_InitStructure;
+  GPIO_InitTypeDef GPIO_InitStructure;
+  
+  /* Enable GPIO clock */
+  RCC_AHB1PeriphClockCmd(USARTy_TX_GPIO_CLK | USARTy_RX_GPIO_CLK, ENABLE);
+  
+  /* Enable USART clock */
+  USARTy_CLK_INIT(USARTy_CLK, ENABLE);
+  
+  /* Connect USART pins to AF7 */
+  GPIO_PinAFConfig(USARTy_TX_GPIO_PORT, USARTy_TX_SOURCE, USARTy_TX_AF);
+  GPIO_PinAFConfig(USARTy_RX_GPIO_PORT, USARTy_RX_SOURCE, USARTy_RX_AF);
+  
+  /* Configure USART Tx and Rx as alternate function push-pull */
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
+  GPIO_InitStructure.GPIO_Pin = USARTy_TX_PIN;
+  GPIO_Init(USARTy_TX_GPIO_PORT, &GPIO_InitStructure);
+  
+  GPIO_InitStructure.GPIO_Pin = USARTy_RX_PIN;
+  GPIO_Init(USARTy_RX_GPIO_PORT, &GPIO_InitStructure);
+
+  /* Enable the USART OverSampling by 8 */
+  USART_OverSampling8Cmd(USARTy, ENABLE);  
+
+  USART_InitStructure.USART_BaudRate = 9600;//115200;
+  USART_InitStructure.USART_WordLength = USART_WordLength_8b;
+  USART_InitStructure.USART_StopBits = USART_StopBits_1;
+  USART_InitStructure.USART_Parity = USART_Parity_No;
+  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+  USART_Init(USARTy, &USART_InitStructure);
+  
+  /* NVIC configuration */
+  /* Configure the Priority Group to 2 bits */
+  NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
+  
+  /* Enable the USARTx Interrupt */
+  NVIC_InitStructure.NVIC_IRQChannel = USARTy_IRQn;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitStructure);
+  
+  /* Enable USART */
+  USART_Cmd(USARTy, ENABLE);
 }
 
 void PWM_config(void){
@@ -1014,24 +984,21 @@ void Configure_PB12(void) {
   NVIC_Init(&NVIC_InitStruct);
 }
 
-#if 1
 void EXTI15_10_IRQHandler(void) {
   /* Make sure that interrupt flag is set */
   if (EXTI_GetITStatus(EXTI_Line12) != RESET) {
-    /* Do your stuff when PD0 is changed */
-    
     oldTime = currentTime;
     currentTime = Timing;
 
-    if((currentTime - oldTime) > 100){
-      over_flag = 1;
+    if (currentTime > oldTime)
+    {
+      diffTime = currentTime - oldTime;
     }
-    
-    /* Clear interrupt flag */
+
+    currentTime = Timing;    
     EXTI_ClearITPendingBit(EXTI_Line12);
   }
 }
-#endif
 
 /**
   * @brief  This function handles the test program fail.
@@ -1059,5 +1026,4 @@ void Fail_Handler(void)
 void vApplicationTickHook()
 {
     Timing ++;
-    STM_EVAL_LEDToggle(LED6);
 }

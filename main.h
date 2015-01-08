@@ -89,6 +89,26 @@ static volatile long writed_packet_num = 1;
 #define USARTx_RX_SOURCE                 GPIO_PinSource11
 #define USARTx_RX_AF                     GPIO_AF_USART3
 
+// usart6
+#define USARTy                           USART6
+#define USARTy_CLK                       RCC_APB2Periph_USART6
+#define USARTy_CLK_INIT                  RCC_APB2PeriphClockCmd
+#define USARTy_IRQn                      USART6_IRQn
+#define USARTy_IRQHandler                USART6_IRQHandler
+
+#define USARTy_TX_PIN                    GPIO_Pin_6                
+#define USARTy_TX_GPIO_PORT              GPIOC                       
+#define USARTy_TX_GPIO_CLK               RCC_AHB1Periph_GPIOC
+#define USARTy_TX_SOURCE                 GPIO_PinSource6
+#define USARTy_TX_AF                     GPIO_AF_USART6
+
+#define USARTy_RX_PIN                    GPIO_Pin_7                
+#define USARTy_RX_GPIO_PORT              GPIOC                    
+#define USARTy_RX_GPIO_CLK               RCC_AHB1Periph_GPIOC
+#define USARTy_RX_SOURCE                 GPIO_PinSource7
+#define USARTy_RX_AF                     GPIO_AF_USART6
+
+
 /* Direction Suggestion */
 void direction_suggestion(void);
 //static void min_distance_calculation(void);
