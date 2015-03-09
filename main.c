@@ -52,6 +52,7 @@ int min_distance[9] = {0};
 int check_sum(void);
 int check_index(unsigned int);
 void reset_tmp(void);
+volatile uint32_t v_tmp = 0;
 uint16_t distance_convert(uint8_t data0, uint8_t data1);
 struct lidarData {
   uint8_t data[16];     /* Store the data of 4 angles */
@@ -196,81 +197,88 @@ static void Front_Obstacle_task(void *pvParameters){
   int tmp_degree;
   int16_t x_position;
   int valid_distance[9] = {0};
+  long tmp_1 = 0, tmp_2 = 0, tmp_3 = 0, tmp_4 = 0, tmp_5 = 0, tmp_6 = 0, tmp_7 = 0, tmp_8 = 0, tmp_9 = 0;
+  int ratio = 19;
+  long d_1 = ratio, d_2 = ratio, d_3 = ratio, d_4 = ratio, d_5 = ratio, d_6 = ratio, d_7 = ratio, d_8 = ratio, d_9 = ratio;
+  int tmp_count = 0;
+  char current_status ='F'; /* F : safe */
 
   while(1){
-        long tmp_1 = 0, tmp_2 = 0, tmp_3 = 0, tmp_4 = 0, tmp_5 = 0, tmp_6 = 0, tmp_7 = 0, tmp_8 = 0, tmp_9 = 0;
-        int ratio = 19;
-        long d_1 = ratio, d_2 = ratio, d_3 = ratio, d_4 = ratio, d_5 = ratio, d_6 = ratio, d_7 = ratio, d_8 = ratio, d_9 = ratio;
-        int tmp_count = 0;
+        tmp_1 = 0, tmp_2 = 0, tmp_3 = 0, tmp_4 = 0, tmp_5 = 0, tmp_6 = 0, tmp_7 = 0, tmp_8 = 0, tmp_9 = 0;
+        ratio = 19;
+        d_1 = ratio, d_2 = ratio, d_3 = ratio, d_4 = ratio, d_5 = ratio, d_6 = ratio, d_7 = ratio, d_8 = ratio, d_9 = ratio;
+        tmp_count = 0;
+        current_status = 'F';
 
         for(tmp_count = 0; tmp_count < ratio; tmp_count++){
           if(degree_distance[tmp_count] > 0){
             tmp_1 += degree_distance[tmp_count];
           }
+          /* degree distance equal to 0 : invalid
+           * we should ignore the invalid value when we calculate average value
+           */
           else{
             d_1 --;
           }
 
-          if(degree_distance[tmp_count+ratio] > 0){
+          if(degree_distance[tmp_count + ratio] > 0){
             tmp_2 += degree_distance[tmp_count+ratio];
           }
           else{
             d_2 --;
           }
 
-          if(degree_distance[tmp_count+ratio*2] > 0){
-            tmp_3 += degree_distance[tmp_count+ratio*2];
+          if(degree_distance[tmp_count + ratio*2] > 0){
+            tmp_3 += degree_distance[tmp_count + ratio*2];
           }
           else{
             d_3 --;
           }
           
-          if(degree_distance[tmp_count+ratio*3] > 0){
-            tmp_4 += degree_distance[tmp_count+ratio*3];
+          if(degree_distance[tmp_count + ratio*3] > 0){
+            tmp_4 += degree_distance[tmp_count + ratio*3];
           }
           else{
             d_4 --;
           }
           
-          if(degree_distance[tmp_count+ratio*4] > 0){
-            tmp_5 += degree_distance[tmp_count+ratio*4];
+          if(degree_distance[tmp_count + ratio*4] > 0){
+            tmp_5 += degree_distance[tmp_count + ratio*4];
           }
           else{
             d_5 --;
           }
 
-          if(degree_distance[tmp_count+ratio*5] > 0){
-            tmp_6 += degree_distance[tmp_count+ratio*5];
+          if(degree_distance[tmp_count + ratio*5] > 0){
+            tmp_6 += degree_distance[tmp_count + ratio*5];
           }
           else{
             d_6 --;
           }
 
-          if(degree_distance[tmp_count+ratio*6] > 0){
-            tmp_7 += degree_distance[tmp_count+ratio*6];
+          if(degree_distance[tmp_count + ratio*6] > 0){
+            tmp_7 += degree_distance[tmp_count + ratio*6];
           }
           else{
             d_7 --;
           }
 
-          if(degree_distance[tmp_count+ratio*7] > 0){
-            tmp_8 += degree_distance[tmp_count+ratio*7];
+          if(degree_distance[tmp_count + ratio*7] > 0){
+            tmp_8 += degree_distance[tmp_count + ratio*7];
           }
           else{
             d_8 --;
           }
 
-          if(degree_distance[tmp_count+ratio*8] > 0){
-            tmp_9 += degree_distance[tmp_count+ratio*8];
+          if(degree_distance[tmp_count + ratio*8] > 0){
+            tmp_9 += degree_distance[tmp_count + ratio*8];
           }
           else{
             d_9 --;
           }
         }
 
-        put_int(d_5);
-        put_int(tmp_5);
-
+        /* Get the average distance from 9 direction */
         tmp_1 = tmp_1/d_1;
         tmp_2 = tmp_2/d_2;
         tmp_3 = tmp_3/d_3;
@@ -281,67 +289,104 @@ static void Front_Obstacle_task(void *pvParameters){
         tmp_8 = tmp_8/d_8;
         tmp_9 = tmp_9/d_9;
 
-        if((tmp_1 < 500) ||(tmp_2 < 500) ||(tmp_3 < 1000) ||(tmp_4 < 2000) || (tmp_5 < 3000) || (tmp_6 < 2000) || (tmp_7 < 1000) || (tmp_8 < 500) || (tmp_9 < 500)){
-          if(btFlag == 0){
-            while(USART_GetFlagStatus(USARTy, USART_FLAG_TXE) == RESET);
-            USART_SendData(USARTy, 'A');
-          }
-        }
-        else{
-          if(btFlag == 0){
-            while(USART_GetFlagStatus(USARTy, USART_FLAG_TXE) == RESET);
-            USART_SendData(USARTy, 'F');
-          }
-        }
+      /* There is a obstacle in front of the scooter. send 'A' */
+      if((tmp_1 < 500)&(d_1)){
+        current_status = 'A';
+        sendAlarmDirection('G');
+      }
 
-      vTaskDelay(200);
+      if((tmp_2 < 600)&(d_2)){
+        current_status = 'A';
+        sendAlarmDirection('H');
+      }
 
+      if((tmp_3 < 800)&(d_3)){
+        current_status = 'A';
+        sendAlarmDirection('I');
+      }
+
+      if((tmp_4 < 1500)&(d_4)){
+        current_status = 'A';
+        sendAlarmDirection('J');
+      }
+
+      if((tmp_5 < 3500)&(d_5)){
+        current_status = 'A';
+        sendAlarmDirection('K');
+      }
+
+      if((tmp_6 < 1500)&(d_6)){
+        current_status = 'A';
+        sendAlarmDirection('L');
+      }
+
+      if((tmp_7 < 800)&(d_7)){
+        current_status = 'A';
+        sendAlarmDirection('M');
+      }
+
+      if((tmp_8 < 600)&(d_8)){
+        current_status = 'A';
+        sendAlarmDirection('N');
+      }
+
+      if((tmp_9 < 500)&(d_9)){
+        current_status = 'A';
+        sendAlarmDirection('O');
+      }
+
+      if(btFlag == 0){
+        while(USART_GetFlagStatus(USARTy, USART_FLAG_TXE) == RESET);
+        USART_SendData(USARTy, current_status);
+      }
+
+      vTaskDelay(100);
   }
+}
+
+void sendAlarmDirection(char c){
+  while(USART_GetFlagStatus(USARTy, USART_FLAG_TXE) == RESET);
+  USART_SendData(USARTy, c);
 }
 
 static void external_interrupt_task(void *pvParameters){
   PWM1 = 0;
-  uint64_t v_tmp = 0;
-  //uint32_t test = 123449;
   
   while(1){
     v_tmp = ((1000*1000/diffTime)*(3600/1000)) / 1000;
-    if (v_tmp > 0 && v_tmp < 30)
+    if (v_tmp >= 0 && v_tmp < 30)
     {
       put_int(v_tmp);
     }
-    //STM_EVAL_LEDToggle(LED5);
-    vTaskDelay(100);
+    vTaskDelay(500);
   }
 }
 
 void put_int(uint32_t number){
   btFlag = 1;
-  if(number != 3000){
-    unsigned char char_buff[10] = {0};
-    int count = 0;
-    
-    /* Trnasfer integer to chars */
-    itoa(number, char_buff, 10);
-    
+  unsigned char char_buff[10] = {0};
+  int count = 0;
+  
+  /* Trnasfer integer to chars */
+  itoa(number, char_buff, 10);
+  
+  while(USART_GetFlagStatus(USARTy, USART_FLAG_TXE) == RESET);
+    USART_SendData(USARTy, 'S');
+
+  vTaskDelay(1);
+
+  /* Send the char buffer to usart */
+  while(count < 2){
     while(USART_GetFlagStatus(USARTy, USART_FLAG_TXE) == RESET);
-      USART_SendData(USARTy, 'S');
-
-    vTaskDelay(10);
-
-    /* Send the char buffer to usart */
-    while(count < 2){
-      while(USART_GetFlagStatus(USARTy, USART_FLAG_TXE) == RESET);
-      USART_SendData(USARTy, char_buff[count]);
-      count ++;
-    }
-
-    vTaskDelay(10);
-    while(USART_GetFlagStatus(USARTy, USART_FLAG_TXE) == RESET);
-      USART_SendData(USARTy, 'E');
-
-    vTaskDelay(10);
+    USART_SendData(USARTy, char_buff[count]);
+    count ++;
   }
+
+  vTaskDelay(1);
+  while(USART_GetFlagStatus(USARTy, USART_FLAG_TXE) == RESET);
+    USART_SendData(USARTy, 'E');
+
+  vTaskDelay(1);
   btFlag = 0;
 }
 
@@ -396,8 +441,6 @@ int check_sum(){
 void write_packet(){
   int count = 0;
   int index = current_packet[1] - 160/* index start from (A0)16 = (160)(10)*/;
-  //lidarBuffer[index].time_stamp[0] = lidarBuffer[index].time_stamp[1];
-  //lidarBuffer[index].time_stamp[1] = LocalTime;
 
   for(; count < 16; count++){
     lidarBuffer[index].data[count] = current_packet[count];
