@@ -63,28 +63,35 @@ volatile struct lidarData lidarBuffer[LidarPacketNumber];
 int front_region_right[5] = {6000};
 int front_region_left[5] = {6000};
 int front_region[9] = {6000};
-volatile int handler_count = 0; 
-/**
-  * @brief  Use this task to check wethrer the FreeRTOS scheduling is working.
-  * @param  None
-  * @retval None
-  */
-static void LED_task(void *pvParameters)
-{
-  STM_EVAL_LEDInit(LED3);
-  STM_EVAL_LEDInit(LED4);
-  STM_EVAL_LEDInit(LED5);
-  
-  while(1)
-  {    
-      /* Toggle LED5 */
-      STM_EVAL_LEDToggle(LED3);
-      vTaskDelay(100);
-      STM_EVAL_LEDToggle(LED4);
-      vTaskDelay(100);
-      STM_EVAL_LEDToggle(LED5);
-      vTaskDelay(100);
+volatile int handler_count = 0;
+
+typedef struct _kalman_state{
+  int32_t q[180];  // process noise covariance
+  int32_t r[180];  // measurement noise covariance
+  int32_t p[180];  // estimation error covariance
+  int32_t x[180];  // distance value
+  int32_t k[180];    // kalman gain
+} kalman_state;
+
+static kalman_state kalman_s;
+
+void kaman_init(kalman_state *k_s){
+  int i = 0;
+  for (i = 0; i < 180; ++i)
+  {
+    k_s -> q[i] = 100;
+    k_s -> r[i] = 2500;
+    k_s -> p[i] = 0.5;
+    k_s -> x[i] = 0;
   }
+}
+
+uint16_t kalman_update(int16_t measure, int16_t i,kalman_state *k_s){
+  k_s->p[i] = k_s->p[i] + k_s->q[i];
+  k_s->k[i] = (k_s->p[i] * 1000) / (k_s->p[i] + k_s->r[i]);
+  k_s->x[i] = (uint16_t)(k_s->x[i] + (k_s->k[i] * (measure - k_s->x[i])/1000 )); 
+  k_s->p[i] = (1000 - k_s->k[i]) * k_s->p[i];
+  return k_s->x[i];
 }
 
 /**
@@ -93,9 +100,6 @@ static void LED_task(void *pvParameters)
   * @retval None
   */
 static void usart_receive_task(void *pvParameters){
-  //int tmp_index;
-  //LCD_Clear(LCD_COLOR_WHITE);
-  //LCD_SetBackColor(LCD_COLOR_WHITE);
   
   while(1){
     /* Enable the Rx interrupt */
@@ -111,7 +115,7 @@ static void usart_receive_task(void *pvParameters){
       write_packet();
     }
     reset_tmp();
-    vTaskDelay(1);
+    vTaskDelay(10);
   }
 }
 
@@ -151,7 +155,7 @@ static void lidar_display_task(void *pvParameters){
   * @retval None
   */
 static void Transfer_Distance_task(void *pvParameters){
-  int count = 0;
+  int16_t count = 0;
   uint16_t distance_angle1 = 0;
   uint16_t distance_angle2 = 0;
   uint16_t distance_angle3 = 0;
@@ -159,31 +163,40 @@ static void Transfer_Distance_task(void *pvParameters){
 
   while(1){
     for(count = 0; count < 45; count++){
-      //if(distance_convert(lidarBuffer[count].data[0], lidarBuffer[count].data[1]) != -1){
-        distance_angle1 = distance_convert(lidarBuffer[count].data[0], lidarBuffer[count].data[1]);
-      //}
-      //printf("A: %d D: %d \n", count * 4, distance_angle1);
+      distance_angle1 = distance_convert(lidarBuffer[count].data[0], lidarBuffer[count].data[1]);
+      distance_angle2 = distance_convert(lidarBuffer[count].data[4], lidarBuffer[count].data[5]);
+      distance_angle3 = distance_convert(lidarBuffer[count].data[8], lidarBuffer[count].data[9]);
+      distance_angle4 = distance_convert(lidarBuffer[count].data[12], lidarBuffer[count].data[13]);
+      
+      if (distance_angle1 == 0)
+      {
+        distance_angle1 = 5500;
+      }
+      if (distance_angle2 == 0)
+      {
+        distance_angle2 = 5500;
+      }
+      if (distance_angle3 == 0)
+      {
+        distance_angle3 = 5500;
+      }
+      if (distance_angle4 == 0)
+      {
+        distance_angle4 = 5500;
+      }
 
-      //if(distance_convert(lidarBuffer[count].data[4], lidarBuffer[count].data[5]) != -1){
-        distance_angle2 = distance_convert(lidarBuffer[count].data[4], lidarBuffer[count].data[5]);
-      //}
-      //printf("A: %d D: %d \n", count * 4 + 1, distance_angle2);
-      
-      //if(distance_convert(lidarBuffer[count].data[8], lidarBuffer[count].data[9]) != -1){
-        distance_angle3 = distance_convert(lidarBuffer[count].data[8], lidarBuffer[count].data[9]);
-      //}
-      //printf("A: %d D: %d \n", count * 4 + 1, distance_angle3);
-      
-      //if(distance_convert(lidarBuffer[count].data[12], lidarBuffer[count].data[13]) != -1){
-        distance_angle4 = distance_convert(lidarBuffer[count].data[12], lidarBuffer[count].data[13]);
-      //}
-      //printf("A: %d D: %d \n", count * 4 + 1, distance_angle4);
-      
+      int16_t c_1 = count*4;
+
       /* Write data to distance array */
-      degree_distance[count*4] = distance_angle1;
-      degree_distance[count*4 + 1] = distance_angle2;
-      degree_distance[count*4 + 2] = distance_angle3;
-      degree_distance[count*4 + 3] = distance_angle4;
+      degree_distance[c_1] = kalman_update(distance_angle1, c_1, &kalman_s);
+      degree_distance[c_1 + 1] = kalman_update(distance_angle2, c_1 + 1, &kalman_s);
+      degree_distance[c_1 + 2] = kalman_update(distance_angle3, c_1 + 2, &kalman_s);
+      degree_distance[c_1 + 3] = kalman_update(distance_angle4, c_1 + 3, &kalman_s);
+
+     // degree_distance[c_1] = distance_angle1;
+     // degree_distance[c_1 + 1] = distance_angle2;
+     // degree_distance[c_1 + 2] = distance_angle3;
+     // degree_distance[c_1 + 3] = distance_angle4;
     }
     vTaskDelay(30);
   }
@@ -195,20 +208,16 @@ static void Transfer_Distance_task(void *pvParameters){
   * @retval None
   */
 static void Front_Obstacle_task(void *pvParameters){
-  int count, i;
-  int tmp_degree;
-  int16_t x_position;
-  int tmp_count = 0;
   char current_status ='F'; // F : safe 
   char safe_message[9] = {'o', 'n', 'm', 'l', 'k', 'j', 'i', 'h', 'g'};
   char alarm_message[9] = {'O', 'N', 'M', 'L', 'K', 'J', 'I', 'H', 'G'};
   int range_alarm_distance[9] = {500,600,800,1500,3200,1500,800,600,500};
-  int range_size = 19; //19
-  int range_number = 9;
+  int range_size = 10; //19
+  int range_number = 18;
 
   while(1){
-    long range_distance[9] = {0};
-    long valid_distance[9] = {range_size};
+    long range_distance[18] = {0};
+    long valid_distance[18] = {10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10};
     int tmp_count, tmp_count2 = 0;
     current_status = 'F';
 
@@ -229,17 +238,14 @@ static void Front_Obstacle_task(void *pvParameters){
     }
 
     // There is a obstacle in front of the scooter. send 'A'
-    for (range_count = 0; range_count < range_number; range_count++){
-      if (range_distance[range_count] < range_alarm_distance[range_count]){
+    for (range_count = 0; range_count < range_number/2; range_count++){
+      if (((range_distance[range_count*2] < range_alarm_distance[range_count]) & valid_distance[range_count*2]) || ((range_distance[range_count*2 + 1] < range_alarm_distance[range_count]) & valid_distance[range_count*2 + 1])){
         current_status = 'A';
         sendDirectionMessage(alarm_message[range_count]);
       } else{
         sendDirectionMessage(safe_message[range_count]);
       }
     }
-
-    put_int(range_distance[4]);
-    put_int(valid_distance[4]);
 
     if(btFlag == 0){
       while(USART_GetFlagStatus(USARTy, USART_FLAG_TXE) == RESET);
@@ -248,8 +254,6 @@ static void Front_Obstacle_task(void *pvParameters){
     vTaskDelay(100);
   }
 }
-
-
 
 void sendDirectionMessage(char c){
   if(btFlag == 0){
@@ -454,9 +458,10 @@ int main(void)
   /* Reset UserButton_Pressed variable */
   UserButtonPressed = 0x00;
 
+  kaman_init(&kalman_s);
+
   //PWM_config();
-  Configure_PB12();
-  //xTaskCreate(external_interrupt_task,(signed portCHAR *) "Implement External Interrupt",512 /* stack size */, NULL, tskIDLE_PRIORITY + 3, NULL);
+  //Configure_PB12();
   xTaskCreate(usart_receive_task,(signed portCHAR *) "Implement USART",512 /* stack size */, NULL, tskIDLE_PRIORITY + 3, NULL);
   xTaskCreate(Transfer_Distance_task,(signed portCHAR *) "Implement Transfer distance.",512 /* stack size */, NULL, tskIDLE_PRIORITY + 3, NULL);
   xTaskCreate(Front_Obstacle_task,(signed portCHAR *) "Implement front obstacle detect.",512 /* stack size */, NULL, tskIDLE_PRIORITY + 3, NULL);
@@ -571,324 +576,6 @@ void USART1_Config(void){
   
   /* Enable USART */
   USART_Cmd(USARTy, ENABLE);
-}
-
-void PWM_config(void){
-  PA2_PWM_config();
-  PB14_15_PWM_config();
-  PC8_9_PWM_config();
-  PE6_PWM_config();
-  PB4_5_PWM_config();
-  PB9_PWM_config();
-  PD12_15_PWM_config();
-}
-
-void PA2_PWM_config(void){
-  GPIO_InitTypeDef GPIO_InitStructure;
-  TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStruct;
-  TIM_OCInitTypeDef TIM_OCInitStruct;
-  
-  RCC_AHB1PeriphClockCmd(  RCC_AHB1Periph_GPIOA , ENABLE );
-  RCC_APB1PeriphClockCmd( RCC_APB1Periph_TIM2, ENABLE );
-    
-  GPIO_StructInit(&GPIO_InitStructure); // Reset init structure
-
-  GPIO_PinAFConfig(GPIOA, GPIO_PinSource2, GPIO_AF_TIM2);
-  GPIO_PinAFConfig(GPIOA, GPIO_PinSource3, GPIO_AF_TIM2);
-    
-  // Setup Blue & Green LED on STM32-Discovery Board to use PWM.
-  GPIO_InitStructure.GPIO_Pin =  GPIO_Pin_2 | GPIO_Pin_3;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;            // Alt Function - Push Pull
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
-  GPIO_Init( GPIOA, &GPIO_InitStructure );  
-      
-  TIM_TimeBaseStructInit( &TIM_TimeBaseInitStruct );
-  TIM_TimeBaseInitStruct.TIM_ClockDivision = TIM_CKD_DIV1;
-  TIM_TimeBaseInitStruct.TIM_Period = 1000 - 1;
-  TIM_TimeBaseInitStruct.TIM_Prescaler = 840.;
-  TIM_TimeBaseInit( TIM2, &TIM_TimeBaseInitStruct );
-
-  TIM_OCStructInit( &TIM_OCInitStruct );
-  TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Enable;
-  TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_PWM1;
-
-  TIM_OC3Init( TIM2, &TIM_OCInitStruct );
-  TIM_OC4Init( TIM2, &TIM_OCInitStruct );
-
-  TIM_Cmd( TIM2, ENABLE );
-}
-
-void PB14_15_PWM_config(void){
-  GPIO_InitTypeDef GPIO_InitStructure;
-  TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStruct;
-  TIM_OCInitTypeDef TIM_OCInitStruct;
-  
-  RCC_AHB1PeriphClockCmd(  RCC_AHB1Periph_GPIOB , ENABLE );
-  RCC_APB1PeriphClockCmd( RCC_APB1Periph_TIM12, ENABLE );
-    
-  GPIO_StructInit(&GPIO_InitStructure); // Reset init structure
-
-  GPIO_PinAFConfig(GPIOB, GPIO_PinSource14, GPIO_AF_TIM12);
-  GPIO_PinAFConfig(GPIOB, GPIO_PinSource15, GPIO_AF_TIM12);
-    
-  // Setup Blue & Green LED on STM32-Discovery Board to use PWM.
-  GPIO_InitStructure.GPIO_Pin =  GPIO_Pin_14 | GPIO_Pin_15;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;            // Alt Function - Push Pull
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
-  GPIO_Init( GPIOB, &GPIO_InitStructure );  
-      
-  TIM_TimeBaseStructInit( &TIM_TimeBaseInitStruct );
-  TIM_TimeBaseInitStruct.TIM_ClockDivision = TIM_CKD_DIV1;
-  TIM_TimeBaseInitStruct.TIM_Period = 100 - 1;
-  TIM_TimeBaseInitStruct.TIM_Prescaler = 8400;
-  TIM_TimeBaseInit( TIM12, &TIM_TimeBaseInitStruct );
-
-  TIM_OCStructInit( &TIM_OCInitStruct );
-  TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Enable;
-  TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_PWM1;
-
-  TIM_OC1Init( TIM12, &TIM_OCInitStruct );
-  TIM_OC2Init( TIM12, &TIM_OCInitStruct );
-
-  TIM_Cmd( TIM12, ENABLE );
-}
-
-void PB4_5_PWM_config(void){
-  GPIO_InitTypeDef GPIO_InitStructure;
-  TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStruct;
-  TIM_OCInitTypeDef TIM_OCInitStruct;
-  
-  RCC_AHB1PeriphClockCmd(  RCC_AHB1Periph_GPIOB , ENABLE );
-  RCC_APB1PeriphClockCmd( RCC_APB1Periph_TIM3, ENABLE );
-    
-  GPIO_StructInit(&GPIO_InitStructure); // Reset init structure
-
-  GPIO_PinAFConfig(GPIOB, GPIO_PinSource4, GPIO_AF_TIM3);
-  GPIO_PinAFConfig(GPIOB, GPIO_PinSource5, GPIO_AF_TIM3);
-    
-  // Setup Blue & Green LED on STM32-Discovery Board to use PWM.
-  GPIO_InitStructure.GPIO_Pin =  GPIO_Pin_4 | GPIO_Pin_5; //| GPIO_Pin_15; //PD12->LED3 PD13->LED4 PD14->LED5 PDa5->LED6
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;            // Alt Function - Push Pull
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
-  GPIO_Init( GPIOB, &GPIO_InitStructure );  
-      
-  // Let PWM frequency equal 100Hz.
-  // Let period equal 1000. Therefore, timer runs from zero to 1000. Gives 0.1Hz resolution.
-  // Solving for prescaler gives 240.
-  TIM_TimeBaseStructInit( &TIM_TimeBaseInitStruct );
-  TIM_TimeBaseInitStruct.TIM_ClockDivision = TIM_CKD_DIV1;
-  TIM_TimeBaseInitStruct.TIM_Period = 100 - 1;
-  TIM_TimeBaseInitStruct.TIM_Prescaler = 8400;
-  TIM_TimeBaseInit( TIM3, &TIM_TimeBaseInitStruct );
-
-  TIM_OCStructInit( &TIM_OCInitStruct );
-  TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Enable;
-  TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_PWM1;
-
-  TIM_OC1Init( TIM3, &TIM_OCInitStruct );
-  TIM_OC2Init( TIM3, &TIM_OCInitStruct );
-
-  TIM_Cmd( TIM3, ENABLE );
-}
-
-void PB7_8_PWM_config(void){
-  GPIO_InitTypeDef GPIO_InitStructure;
-  TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStruct;
-  TIM_OCInitTypeDef TIM_OCInitStruct;
-  
-  RCC_AHB1PeriphClockCmd(  RCC_AHB1Periph_GPIOB , ENABLE );
-  RCC_APB1PeriphClockCmd( RCC_APB1Periph_TIM4, ENABLE );
-    
-  GPIO_StructInit(&GPIO_InitStructure); // Reset init structure
-
-  GPIO_PinAFConfig(GPIOB, GPIO_PinSource8, GPIO_AF_TIM4);
-    
-  // Setup Blue & Green LED on STM32-Discovery Board to use PWM.
-  GPIO_InitStructure.GPIO_Pin =  GPIO_Pin_8; //| GPIO_Pin_15; //PD12->LED3 PD13->LED4 PD14->LED5 PDa5->LED6
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;            // Alt Function - Push Pull
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
-  GPIO_Init( GPIOB, &GPIO_InitStructure );  
-      
-  // Let PWM frequency equal 100Hz.
-  // Let period equal 1000. Therefore, timer runs from zero to 1000. Gives 0.1Hz resolution.
-  // Solving for prescaler gives 240.
-  TIM_TimeBaseStructInit( &TIM_TimeBaseInitStruct );
-  TIM_TimeBaseInitStruct.TIM_ClockDivision = TIM_CKD_DIV1;
-  TIM_TimeBaseInitStruct.TIM_Period = 100 - 1;
-  TIM_TimeBaseInitStruct.TIM_Prescaler = 8400;
-  TIM_TimeBaseInit( TIM4, &TIM_TimeBaseInitStruct );
-
-  TIM_OCStructInit( &TIM_OCInitStruct );
-  TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Enable;
-  TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_PWM1;
-
-  TIM_OC3Init( TIM4, &TIM_OCInitStruct );
-
-  TIM_Cmd( TIM4, ENABLE );
-}
-
-void PC8_9_PWM_config(void){
-    GPIO_InitTypeDef GPIO_InitStructure;
-  TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStruct;
-  TIM_OCInitTypeDef TIM_OCInitStruct;
-  
-  RCC_AHB1PeriphClockCmd(  RCC_AHB1Periph_GPIOC , ENABLE );
-  RCC_APB1PeriphClockCmd( RCC_APB1Periph_TIM3, ENABLE );
-    
-  GPIO_StructInit(&GPIO_InitStructure); // Reset init structure
-
-  GPIO_PinAFConfig(GPIOC, GPIO_PinSource8, GPIO_AF_TIM3);
-  GPIO_PinAFConfig(GPIOC, GPIO_PinSource9, GPIO_AF_TIM3);
-    
-  // Setup Blue & Green LED on STM32-Discovery Board to use PWM.
-  GPIO_InitStructure.GPIO_Pin =  GPIO_Pin_8 | GPIO_Pin_9; //| GPIO_Pin_15; //PD12->LED3 PD13->LED4 PD14->LED5 PDa5->LED6
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;            // Alt Function - Push Pull
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
-  GPIO_Init( GPIOC, &GPIO_InitStructure );  
-      
-  // Let PWM frequency equal 100Hz.
-  // Let period equal 1000. Therefore, timer runs from zero to 1000. Gives 0.1Hz resolution.
-  // Solving for prescaler gives 240.
-  TIM_TimeBaseStructInit( &TIM_TimeBaseInitStruct );
-  TIM_TimeBaseInitStruct.TIM_ClockDivision = TIM_CKD_DIV1;
-  TIM_TimeBaseInitStruct.TIM_Period = 100 - 1;
-  TIM_TimeBaseInitStruct.TIM_Prescaler = 8400;
-  TIM_TimeBaseInit( TIM3, &TIM_TimeBaseInitStruct );
-
-  TIM_OCStructInit( &TIM_OCInitStruct );
-  TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Enable;
-  TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_PWM1;
-
-  TIM_OC3Init( TIM3, &TIM_OCInitStruct );
-  TIM_OC4Init( TIM3, &TIM_OCInitStruct );
-
-  TIM_Cmd( TIM3, ENABLE );
-}
-
-void PB9_PWM_config(void){
-    GPIO_InitTypeDef GPIO_InitStructure;
-  TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStruct;
-  TIM_OCInitTypeDef TIM_OCInitStruct;
-  
-  RCC_AHB1PeriphClockCmd(  RCC_AHB1Periph_GPIOB , ENABLE );
-  RCC_APB2PeriphClockCmd( RCC_APB2Periph_TIM11, ENABLE );
-    
-  GPIO_StructInit(&GPIO_InitStructure); // Reset init structure
-
-  GPIO_PinAFConfig(GPIOB, GPIO_PinSource9, GPIO_AF_TIM11);
-    
-  // Setup Blue & Green LED on STM32-Discovery Board to use PWM.
-  GPIO_InitStructure.GPIO_Pin =  GPIO_Pin_9; //| GPIO_Pin_15; //PD12->LED3 PD13->LED4 PD14->LED5 PDa5->LED6
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;            // Alt Function - Push Pull
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
-  GPIO_Init( GPIOB, &GPIO_InitStructure );  
-      
-  // Let PWM frequency equal 100Hz.
-  // Let period equal 1000. Therefore, timer runs from zero to 1000. Gives 0.1Hz resolution.
-  // Solving for prescaler gives 240.
-  TIM_TimeBaseStructInit( &TIM_TimeBaseInitStruct );
-  TIM_TimeBaseInitStruct.TIM_ClockDivision = TIM_CKD_DIV1;
-  TIM_TimeBaseInitStruct.TIM_Period = 100 - 1;   // 0..2999
-  TIM_TimeBaseInitStruct.TIM_Prescaler = 8400; // Div 240   500  0.00002 s  =  0.2ms
-  TIM_TimeBaseInit( TIM11, &TIM_TimeBaseInitStruct );
-
-  TIM_OCStructInit( &TIM_OCInitStruct );
-  TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Enable;
-  TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_PWM1;
-
-  TIM_OC1Init( TIM11, &TIM_OCInitStruct );
-
-  TIM_Cmd( TIM11, ENABLE );
-}
-
-void PD12_15_PWM_config(void){
-    GPIO_InitTypeDef GPIO_InitStructure;
-  TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStruct;
-  TIM_OCInitTypeDef TIM_OCInitStruct;
-  
-  RCC_AHB1PeriphClockCmd(  RCC_AHB1Periph_GPIOD , ENABLE );
-  RCC_APB1PeriphClockCmd( RCC_APB1Periph_TIM4, ENABLE );
-    
-  GPIO_StructInit(&GPIO_InitStructure); // Reset init structure
-
-  GPIO_PinAFConfig(GPIOD, GPIO_PinSource12, GPIO_AF_TIM4);
-  GPIO_PinAFConfig(GPIOD, GPIO_PinSource13, GPIO_AF_TIM4);
-    
-  // Setup Blue & Green LED on STM32-Discovery Board to use PWM.
-  GPIO_InitStructure.GPIO_Pin =  GPIO_Pin_12 | GPIO_Pin_13; //| GPIO_Pin_15; //PD12->LED3 PD13->LED4 PD14->LED5 PDa5->LED6
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;            // Alt Function - Push Pull
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
-  GPIO_Init( GPIOD, &GPIO_InitStructure );  
-      
-  // Let PWM frequency equal 100Hz.
-  // Let period equal 1000. Therefore, timer runs from zero to 1000. Gives 0.1Hz resolution.
-  // Solving for prescaler gives 240.
-  TIM_TimeBaseStructInit( &TIM_TimeBaseInitStruct );
-  TIM_TimeBaseInitStruct.TIM_ClockDivision = TIM_CKD_DIV1;
-  TIM_TimeBaseInitStruct.TIM_Period = 100 - 1;   // 0..2999
-  TIM_TimeBaseInitStruct.TIM_Prescaler = 8400; // Div 240   500  0.00002 s  =  0.2ms
-  TIM_TimeBaseInit( TIM4, &TIM_TimeBaseInitStruct );
-
-  TIM_OCStructInit( &TIM_OCInitStruct );
-  TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Enable;
-  TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_PWM1;
-
-  TIM_OC1Init( TIM4, &TIM_OCInitStruct );
-  TIM_OC2Init( TIM4, &TIM_OCInitStruct );
-
-  TIM_Cmd( TIM4, ENABLE );
-}
-
-void PE6_PWM_config(void){
-    GPIO_InitTypeDef GPIO_InitStructure;
-  TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStruct;
-  TIM_OCInitTypeDef TIM_OCInitStruct;
-  
-  RCC_AHB1PeriphClockCmd(  RCC_AHB1Periph_GPIOE , ENABLE );
-  RCC_APB2PeriphClockCmd( RCC_APB2Periph_TIM9, ENABLE );
-    
-  GPIO_StructInit(&GPIO_InitStructure); // Reset init structure
-
-  GPIO_PinAFConfig(GPIOE, GPIO_PinSource6, GPIO_AF_TIM9);
-    
-  // Setup Blue & Green LED on STM32-Discovery Board to use PWM.
-  GPIO_InitStructure.GPIO_Pin =  GPIO_Pin_6; //| GPIO_Pin_15; //PD12->LED3 PD13->LED4 PD14->LED5 PDa5->LED6
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;            // Alt Function - Push Pull
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
-  GPIO_Init( GPIOE, &GPIO_InitStructure );  
-      
-  // Let PWM frequency equal 100Hz.
-  // Let period equal 1000. Therefore, timer runs from zero to 1000. Gives 0.1Hz resolution.
-  // Solving for prescaler gives 240.
-  TIM_TimeBaseStructInit( &TIM_TimeBaseInitStruct );
-  TIM_TimeBaseInitStruct.TIM_ClockDivision = TIM_CKD_DIV1;
-  TIM_TimeBaseInitStruct.TIM_Period = 100 - 1;   // 0..2999
-  TIM_TimeBaseInitStruct.TIM_Prescaler = 8400; // Div 240   500  0.00002 s  =  0.2ms
-  TIM_TimeBaseInit( TIM9, &TIM_TimeBaseInitStruct );
-
-  TIM_OCStructInit( &TIM_OCInitStruct );
-  TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Enable;
-  TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_PWM1;
-
-  TIM_OC2Init( TIM9, &TIM_OCInitStruct );
-
-  TIM_Cmd( TIM9, ENABLE );
 }
 
 void Configure_PB12(void) {

@@ -1,5 +1,6 @@
 /**
-  ******************************************************************************
+  *
+  *****************************************************************************
   * @file    main.h 
   * @author  MCD Application Team
   * @version V1.0.0
@@ -128,6 +129,7 @@ void PE6_PWM_config(void);
 void PB9_PWM_config(void);
 void PD12_15_PWM_config(void);
 void Configure_PB12(void);
+void sendDirectionMessage(char c);
 
 /* ADC Config */
 void DMA2_Stream4_IRQHandler(void);
