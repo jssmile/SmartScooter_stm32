@@ -80,7 +80,7 @@ void kaman_init(kalman_state *k_s){
   for (i = 0; i < 180; ++i)
   {
     k_s -> q[i] = 100;
-    k_s -> r[i] = 2500;
+    k_s -> r[i] = 800;
     k_s -> p[i] = 0.5;
     k_s -> x[i] = 0;
   }
@@ -168,9 +168,9 @@ static void Transfer_Distance_task(void *pvParameters){
       distance_angle3 = distance_convert(lidarBuffer[count].data[8], lidarBuffer[count].data[9]);
       distance_angle4 = distance_convert(lidarBuffer[count].data[12], lidarBuffer[count].data[13]);
       
-      if (distance_angle1 == 0)
-      {
-        distance_angle1 = 5500;
+      //if (distance_angle1 == 0)
+      //{
+        /*distance_angle1 = 5500;
       }
       if (distance_angle2 == 0)
       {
@@ -183,7 +183,7 @@ static void Transfer_Distance_task(void *pvParameters){
       if (distance_angle4 == 0)
       {
         distance_angle4 = 5500;
-      }
+      }*/
 
       int16_t c_1 = count*4;
 
@@ -193,9 +193,9 @@ static void Transfer_Distance_task(void *pvParameters){
       degree_distance[c_1 + 2] = kalman_update(distance_angle3, c_1 + 2, &kalman_s);
       degree_distance[c_1 + 3] = kalman_update(distance_angle4, c_1 + 3, &kalman_s);
 
-     // degree_distance[c_1] = distance_angle1;
-     // degree_distance[c_1 + 1] = distance_angle2;
-     // degree_distance[c_1 + 2] = distance_angle3;
+//      degree_distance[c_1] = distance_angle1;
+ //     degree_distance[c_1 + 1] = distance_angle2;
+   //   degree_distance[c_1 + 2] = distance_angle3;
      // degree_distance[c_1 + 3] = distance_angle4;
     }
     vTaskDelay(30);
@@ -211,7 +211,7 @@ static void Front_Obstacle_task(void *pvParameters){
   char current_status ='F'; // F : safe 
   char safe_message[9] = {'o', 'n', 'm', 'l', 'k', 'j', 'i', 'h', 'g'};
   char alarm_message[9] = {'O', 'N', 'M', 'L', 'K', 'J', 'I', 'H', 'G'};
-  int range_alarm_distance[9] = {500,600,800,1500,3200,1500,800,600,500};
+  int range_alarm_distance[9] = {700,900,1000,2000,3200,2000,1000,900,700};
   int range_size = 10; //19
   int range_number = 18;
 
