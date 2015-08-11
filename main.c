@@ -211,42 +211,89 @@ static void Front_Obstacle_task(void *pvParameters){
   char current_status ='F'; // F : safe 
   char safe_message[9] = {'o', 'n', 'm', 'l', 'k', 'j', 'i', 'h', 'g'};
   char alarm_message[9] = {'O', 'N', 'M', 'L', 'K', 'J', 'I', 'H', 'G'};
-  int range_alarm_distance[9] = {700,900,1000,2000,3200,2000,1000,900,700};
-  int range_size = 10; //19
+  int range_alarm_distance[9] = {500, 700, 1300, 2400, 2800, 2400, 1300, 700, 500};
+  int range_size = 10;
   int range_number = 18;
+  int direction_number = 9;
 
   while(1){
-    long range_distance[18] = {0};
-    long valid_distance[18] = {10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10};
-    int tmp_count, tmp_count2 = 0;
+    int degree_alarm_weight[180] = {0};
+    int degree_valid[180] ={0};
+
+    int range_alarm_weight[18] ={0};
+    int range_valid[18] ={0};
+    
+    int count, count2 = 0;
+    int range_count = 0;
     current_status = 'F';
 
-    for(tmp_count = 0; tmp_count < range_size; tmp_count++){
-      for(tmp_count2 = 0; tmp_count2 < range_number; tmp_count2++){
-        if(degree_distance[tmp_count2*range_size + tmp_count] > 0){
-          range_distance[tmp_count2] += degree_distance[tmp_count2*range_size + tmp_count];
-        } else{
-          valid_distance[tmp_count2] --;
+//  Lidar Algorithm Implementation
+    for (count = 0; count < 180; count++){
+      if (degree_distance[count] > 0){
+        degree_valid[count] = 1;
+      }
+      else{
+        degree_valid[count] = 0;
+      }
+    }
+
+    for(count = 0; count < 180; count++){
+      if (degree_distance[count] < range_alarm_distance[count/20]){
+        degree_alarm_weight[count] = 1;
+      }
+    }
+
+    for(count2 = 0; count2 < range_number; count2++){
+      for (count = 0; count < range_size; count++){
+        if (degree_alarm_weight[count2*range_size + count] == 1 && degree_valid[count2*range_size + count] == 1){
+          range_alarm_weight[count2] ++;
         }
       }
     }
 
-    // Get the average distance from 9 direction 
-    int range_count = 0;
-    for (range_count = 0; range_count < range_number; range_count++){
-      range_distance[range_count] = range_distance[range_count]/valid_distance[range_count];
+//  Double check for the obstacle between two ranges
+    for(count2 = 0; count2 < range_number/2; count2++){
+      for (count = 0; count < range_size; count++){
+        if (degree_alarm_weight[count2*range_size + count +5] == 1 && degree_valid[count2*range_size + count] == 1){
+          range_alarm_weight[count2] ++;
+        }
+      }
     }
 
-    // There is a obstacle in front of the scooter. send 'A'
+    for(count2 = range_number/2; count2 < range_number; count2++){
+      for (count = 0; count < range_size; count++){
+        if (degree_alarm_weight[count2*range_size + count -5] == 1 && degree_valid[count2*range_size + count] == 1){
+          range_alarm_weight[count2] ++;
+        }
+      }
+    }
+//  Double check for the obstacle between two ranges
+
+    for(count2 = 0; count2 < range_number; count2++){
+      for (count = 0; count < range_size; count++)
+      {
+        if (degree_valid[count2*range_size + count] == 1)
+        {
+          range_valid[count2] ++;
+        }
+      }
+    }
+
+//  Lidar Algorithm Implementation
+    //int range_count = 0;
     for (range_count = 0; range_count < range_number/2; range_count++){
-      if (((range_distance[range_count*2] < range_alarm_distance[range_count]) & valid_distance[range_count*2]) || ((range_distance[range_count*2 + 1] < range_alarm_distance[range_count]) & valid_distance[range_count*2 + 1])){
+      int threshold = (range_size - range_valid[range_count])/2;
+      if(range_alarm_weight[range_count*2] > threshold || range_alarm_weight[range_count*2 + 1] > threshold){
         current_status = 'A';
         sendDirectionMessage(alarm_message[range_count]);
       } else{
         sendDirectionMessage(safe_message[range_count]);
       }
     }
-
+    //current_status = 'A';
+    //sendDirectionMessage(alarm_message[range_count]);
+    //sendDirectionMessage(safe_message[range_count]);
+      
     if(btFlag == 0){
       while(USART_GetFlagStatus(USARTy, USART_FLAG_TXE) == RESET);
       USART_SendData(USARTy, current_status);
