@@ -45,7 +45,9 @@ volatile int btFlag = 0;
 
 /* Lidar (Usart) -------------------------------------------------------------*/
 //const int front_obstacle_region[90] = {500, 500, 500, 501, 501, 502, 503, 504, 505, 506, 508, 509, 511, 513, 515, 518, 520, 523, 526, 529, 532, 536, 539, 543, 547, 552, 556, 561, 566, 572, 577, 583, 590, 596, 603, 610, 618, 626, 635, 643, 653, 663, 673, 684, 695, 707, 720, 733, 747, 762, 778, 795, 812, 831, 851, 872, 894, 918, 944, 971, 1000, 1031, 1065, 1101, 1141, 1183, 1229, 1280, 1335, 1395, 1462, 1536, 1618, 1710, 1814, 1932, 2067, 2223, 2405, 2620, 2879, 3196, 3593, 4103, 4783, 5737, 7168, 9554, 14327, 28649};
-const int sin_array[90] = {0, 17, 35, 53, 71, 89, 107, 124, 142, 160, 177, 195, 212, 230, 247, 265, 282, 299, 316, 333, 350, 366, 383, 400, 416, 432, 448, 464, 480, 496, 511, 527, 542, 557, 572, 587, 601, 616, 630, 644, 658, 671, 685, 698, 711, 724, 736, 748, 760, 772, 784, 795, 806, 817, 828, 838, 848, 858, 868, 877, 886, 895, 904, 912, 920, 928, 935, 942, 949, 955, 962, 968, 973, 979, 984, 989, 993, 997, 1001, 1005, 1008, 1011, 1014, 1016, 1018, 1020, 1021, 1022, 1023, 1023};
+
+//modified by Sam 2015/10/3
+//const int sin_array[90] = {0, 17, 35, 53, 71, 89, 107, 124, 142, 160, 177, 195, 212, 230, 247, 265, 282, 299, 316, 333, 350, 366, 383, 400, 416, 432, 448, 464, 480, 496, 511, 527, 542, 557, 572, 587, 601, 616, 630, 644, 658, 671, 685, 698, 711, 724, 736, 748, 760, 772, 784, 795, 806, 817, 828, 838, 848, 858, 868, 877, 886, 895, 904, 912, 920, 928, 935, 942, 949, 955, 962, 968, 973, 979, 984, 989, 993, 997, 1001, 1005, 1008, 1011, 1014, 1016, 1018, 1020, 1021, 1022, 1023, 1023};
 static uint8_t aRxBuffer = 0;
 int16_t degree_distance[180] = {0};    /* Use this array to store distance information of front 180 degree */
 int min_distance[9] = {0};
@@ -54,6 +56,7 @@ int check_index(unsigned int);
 void reset_tmp(void);
 volatile uint32_t v_tmp = 0;
 uint16_t distance_convert(uint8_t data0, uint8_t data1);
+
 struct lidarData {
   uint8_t data[16];     /* Store the data of 4 angles */
   uint64_t time_stamp[2];  /* Use this to check update time */
@@ -87,6 +90,7 @@ void kaman_init(kalman_state *k_s){
 }
 
 uint16_t kalman_update(int16_t measure, int16_t i,kalman_state *k_s){
+  k_s->p[i] = ((k_s -> q[i])*(k_s -> q[i])+(k_s -> r[i])*(k_s -> r[i]))^(1/2);
   k_s->p[i] = k_s->p[i] + k_s->q[i];
   k_s->k[i] = (k_s->p[i] * 1000) / (k_s->p[i] + k_s->r[i]);
   k_s->x[i] = (uint16_t)(k_s->x[i] + (k_s->k[i] * (measure - k_s->x[i])/1000 )); 
@@ -167,23 +171,6 @@ static void Transfer_Distance_task(void *pvParameters){
       distance_angle2 = distance_convert(lidarBuffer[count].data[4], lidarBuffer[count].data[5]);
       distance_angle3 = distance_convert(lidarBuffer[count].data[8], lidarBuffer[count].data[9]);
       distance_angle4 = distance_convert(lidarBuffer[count].data[12], lidarBuffer[count].data[13]);
-      
-      //if (distance_angle1 == 0)
-      //{
-        /*distance_angle1 = 5500;
-      }
-      if (distance_angle2 == 0)
-      {
-        distance_angle2 = 5500;
-      }
-      if (distance_angle3 == 0)
-      {
-        distance_angle3 = 5500;
-      }
-      if (distance_angle4 == 0)
-      {
-        distance_angle4 = 5500;
-      }*/
 
       int16_t c_1 = count*4;
 
@@ -310,6 +297,7 @@ void sendDirectionMessage(char c){
   vTaskDelay(10);
 }
 
+//proximity switch
 static void external_interrupt_task(void *pvParameters){
   PWM1 = 0;
   
@@ -317,7 +305,7 @@ static void external_interrupt_task(void *pvParameters){
     v_tmp = ((1000*1000/diffTime)*(3600/1000)) / 1000;
     if (v_tmp >= 0 && v_tmp < 30)
     {
-      //put_int(v_tmp);
+      put_int(v_tmp);
     }
     vTaskDelay(500);
   }
