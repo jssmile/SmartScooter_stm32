@@ -43,11 +43,6 @@ __IO uint64_t Velocity = 0;
 volatile int over_flag = 0;
 volatile int btFlag = 0;
 
-/* Lidar (Usart) -------------------------------------------------------------*/
-//const int front_obstacle_region[90] = {500, 500, 500, 501, 501, 502, 503, 504, 505, 506, 508, 509, 511, 513, 515, 518, 520, 523, 526, 529, 532, 536, 539, 543, 547, 552, 556, 561, 566, 572, 577, 583, 590, 596, 603, 610, 618, 626, 635, 643, 653, 663, 673, 684, 695, 707, 720, 733, 747, 762, 778, 795, 812, 831, 851, 872, 894, 918, 944, 971, 1000, 1031, 1065, 1101, 1141, 1183, 1229, 1280, 1335, 1395, 1462, 1536, 1618, 1710, 1814, 1932, 2067, 2223, 2405, 2620, 2879, 3196, 3593, 4103, 4783, 5737, 7168, 9554, 14327, 28649};
-
-//modified by Sam 2015/10/3
-//const int sin_array[90] = {0, 17, 35, 53, 71, 89, 107, 124, 142, 160, 177, 195, 212, 230, 247, 265, 282, 299, 316, 333, 350, 366, 383, 400, 416, 432, 448, 464, 480, 496, 511, 527, 542, 557, 572, 587, 601, 616, 630, 644, 658, 671, 685, 698, 711, 724, 736, 748, 760, 772, 784, 795, 806, 817, 828, 838, 848, 858, 868, 877, 886, 895, 904, 912, 920, 928, 935, 942, 949, 955, 962, 968, 973, 979, 984, 989, 993, 997, 1001, 1005, 1008, 1011, 1014, 1016, 1018, 1020, 1021, 1022, 1023, 1023};
 static uint8_t aRxBuffer = 0;
 int16_t degree_distance[180] = {0};    /* Use this array to store distance information of front 180 degree */
 int min_distance[9] = {0};
@@ -483,12 +478,8 @@ int main(void)
   STM_EVAL_PBInit(BUTTON_USER, BUTTON_MODE_EXTI);
 
   /* Initialize LEDs to be managed by GPIO */
-  STM_EVAL_LEDInit(LED5);
-  STM_EVAL_LEDInit(LED6);
-  STM_EVAL_LEDToggle(LED5);
-  STM_EVAL_LEDToggle(LED6);
   USART_Config();
-  USART1_Config();
+  //USART1_Config();
 
   /* Reset UserButton_Pressed variable */
   UserButtonPressed = 0x00;
@@ -560,58 +551,8 @@ void USART_Config(void)
   USART_Cmd(USARTx, ENABLE);
 }
 
-void USART1_Config(void){
 
-  USART_InitTypeDef USART_InitStructure;
-  NVIC_InitTypeDef NVIC_InitStructure;
-  GPIO_InitTypeDef GPIO_InitStructure;
-  
-  /* Enable GPIO clock */
-  RCC_AHB1PeriphClockCmd(USARTy_TX_GPIO_CLK | USARTy_RX_GPIO_CLK, ENABLE);
-  
-  /* Enable USART clock */
-  USARTy_CLK_INIT(USARTy_CLK, ENABLE);
-  
-  /* Connect USART pins to AF7 */
-  GPIO_PinAFConfig(USARTy_TX_GPIO_PORT, USARTy_TX_SOURCE, USARTy_TX_AF);
-  GPIO_PinAFConfig(USARTy_RX_GPIO_PORT, USARTy_RX_SOURCE, USARTy_RX_AF);
-  
-  /* Configure USART Tx and Rx as alternate function push-pull */
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-  GPIO_InitStructure.GPIO_Pin = USARTy_TX_PIN;
-  GPIO_Init(USARTy_TX_GPIO_PORT, &GPIO_InitStructure);
-  
-  GPIO_InitStructure.GPIO_Pin = USARTy_RX_PIN;
-  GPIO_Init(USARTy_RX_GPIO_PORT, &GPIO_InitStructure);
 
-  /* Enable the USART OverSampling by 8 */
-  USART_OverSampling8Cmd(USARTy, ENABLE);  
-
-  USART_InitStructure.USART_BaudRate = 9600;//115200;
-  USART_InitStructure.USART_WordLength = USART_WordLength_8b;
-  USART_InitStructure.USART_StopBits = USART_StopBits_1;
-  USART_InitStructure.USART_Parity = USART_Parity_No;
-  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
-  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
-  USART_Init(USARTy, &USART_InitStructure);
-  
-  /* NVIC configuration */
-  /* Configure the Priority Group to 2 bits */
-  NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
-  
-  /* Enable the USARTx Interrupt */
-  NVIC_InitStructure.NVIC_IRQChannel = USARTy_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
-  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-  NVIC_Init(&NVIC_InitStructure);
-  
-  /* Enable USART */
-  USART_Cmd(USARTy, ENABLE);
-}
 
 void Configure_PB12(void) {
   /* Set variables used */
@@ -675,25 +616,6 @@ void EXTI15_10_IRQHandler(void) {
   }
 }
 
-/**
-  * @brief  This function handles the test program fail.
-  * @param  None
-  * @retval None
-  */
-void Fail_Handler(void)
-{
-  /* Erase last sector */ 
-  FLASH_EraseSector(FLASH_Sector_11, VoltageRange_3);
-  /* Write FAIL code at last word in the flash memory */
-  FLASH_ProgramWord(TESTRESULT_ADDRESS, ALLTEST_FAIL);
-  
-  while(1)
-  {
-    /* Toggle Red LED */
-    STM_EVAL_LEDToggle(LED5);
-    vTaskDelay(5);
-  }
-}
 
 /*  Frequency = 116kHz 
     it can be config in FreeRTOSConfig.h
