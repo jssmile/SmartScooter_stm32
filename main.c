@@ -303,10 +303,10 @@ static void external_interrupt_task(void *pvParameters){
   
   while(1){
     v_tmp = ((1000*1000/diffTime)*(3600/1000)) / 1000;
-    //if (v_tmp >= 0 && v_tmp < 30)
-  //  {
+    if (v_tmp >= 0 && v_tmp < 30)
+    {
       put_int(v_tmp);
-//    }
+    }
     vTaskDelay(500);
   }
 }
