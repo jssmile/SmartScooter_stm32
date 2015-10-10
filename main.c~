@@ -479,7 +479,7 @@ int main(void)
 
   /* Initialize LEDs to be managed by GPIO */
   USART_Config();
-  USART1_Config();
+  //USART1_Config();
 
   /* Reset UserButton_Pressed variable */
   UserButtonPressed = 0x00;

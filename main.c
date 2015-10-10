@@ -83,7 +83,7 @@ void kaman_init(kalman_state *k_s){
     k_s -> x[i] = 0;
   }
 }
-
+//sam
 uint16_t kalman_update(int16_t measure, int16_t i,kalman_state *k_s){
   k_s->p[i] = ((k_s -> q[i])*(k_s -> q[i])+(k_s -> r[i])*(k_s -> r[i]))^(1/2);
   k_s->p[i] = k_s->p[i] + k_s->q[i];
